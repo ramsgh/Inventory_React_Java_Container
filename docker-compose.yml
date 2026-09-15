@@ -1,0 +1,67 @@
+version: '3.8'
+
+services:
+  mongodb:
+    image: mongo:latest
+    container_name: inventory-mongodb
+    ports:
+      - "27017:27017"
+    networks:
+      - inventory-network
+    volumes:
+      - mongo-data:/data/db
+
+  service-registry:
+    build: ./service-registry
+    container_name: inventory-registry
+    ports:
+      - "8761:8761"
+    networks:
+      - inventory-network
+
+  product-service:
+    build: ./product-service
+    container_name: inventory-product-service
+    ports:
+      - "8081:8081"
+    environment:
+      - SPRING_DATA_MONGODB_URI=mongodb://mongodb:27017/inventory_db
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://service-registry:8761/eureka/
+    depends_on:
+      - mongodb
+      - service-registry
+    networks:
+      - inventory-network
+
+  api-gateway:
+    build: ./api-gateway
+    container_name: inventory-api-gateway
+    ports:
+      - "8080:8080"
+    environment:
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://service-registry:8761/eureka/
+    depends_on:
+      - service-registry
+    networks:
+      - inventory-network
+
+  inventory-frontend:
+    build: ./inventory-frontend
+    container_name: inventory-frontend-app
+    ports:
+      - "3000:3000"
+    environment:
+      - WDS_SOCKET_PORT=0
+    stdin_open: true
+    tty: true
+    depends_on:
+      - api-gateway
+    networks:
+      - inventory-network
+
+networks:
+  inventory-network:
+    driver: bridge
+
+volumes:
+  mongo-data:
