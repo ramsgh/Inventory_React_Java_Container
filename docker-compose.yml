@@ -1,8 +1,12 @@
 version: '3.8'
 
 services:
+
+  # =========================
+  # MongoDB
+  # =========================
   mongodb:
-    image: mongo:latest
+    image: mongo:7.0
     container_name: inventory-mongodb
     ports:
       - "27017:27017"
@@ -10,7 +14,16 @@ services:
       - inventory-network
     volumes:
       - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
+
+  # =========================
+  # Eureka Service Registry
+  # =========================
   service-registry:
     build: ./service-registry
     container_name: inventory-registry
@@ -19,49 +32,89 @@ services:
     networks:
       - inventory-network
 
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8761/eureka/apps"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+
+  # =========================
+  # Product Service
+  # =========================
   product-service:
     build: ./product-service
     container_name: inventory-product-service
     ports:
       - "8081:8081"
+
     environment:
-      - SPRING_DATA_MONGODB_URI=mongodb://mongodb:27017/inventory_db
-      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://service-registry:8761/eureka/
+      SPRING_DATA_MONGODB_URI: mongodb://mongodb:27017/inventory_db
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://service-registry:8761/eureka/
+
     depends_on:
-      - mongodb
-      - service-registry
+      mongodb:
+        condition: service_healthy
+      service-registry:
+        condition: service_healthy
+
     networks:
       - inventory-network
 
+
+  # =========================
+  # API Gateway
+  # =========================
   api-gateway:
     build: ./api-gateway
     container_name: inventory-api-gateway
     ports:
       - "8080:8080"
+
     environment:
-      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://service-registry:8761/eureka/
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://service-registry:8761/eureka/
+
     depends_on:
-      - service-registry
+      service-registry:
+        condition: service_healthy
+
     networks:
       - inventory-network
 
+
+  # =========================
+  # React Frontend
+  # =========================
   inventory-frontend:
     build: ./inventory-frontend
     container_name: inventory-frontend-app
     ports:
       - "3000:3000"
+
     environment:
-      - WDS_SOCKET_PORT=0
+      WDS_SOCKET_PORT: 0
+
     stdin_open: true
     tty: true
+
     depends_on:
       - api-gateway
+
     networks:
       - inventory-network
 
+
+# =========================
+# Network
+# =========================
 networks:
   inventory-network:
     driver: bridge
 
+
+# =========================
+# Persistent MongoDB data
+# =========================
 volumes:
   mongo-data:

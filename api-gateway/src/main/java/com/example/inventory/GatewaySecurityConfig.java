@@ -1,4 +1,5 @@
 package com.example.inventory;
+
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -13,24 +14,40 @@ import org.springframework.security.web.server.SecurityWebFilterChain;
 @Configuration
 @EnableWebFluxSecurity
 public class GatewaySecurityConfig {
+
     @Bean
-    public SecurityWebFilterChain springSecurityFilterChain(ServerHttpSecurity http) {
+    public SecurityWebFilterChain springSecurityFilterChain(
+            ServerHttpSecurity http) {
+
         http
-            .csrf(csrf -> csrf.disable())
-            .authorizeExchange(exchanges -> exchanges
-                .pathMatchers(HttpMethod.GET, "/api/products/**").permitAll()
-                .anyExchange().authenticated()
-            )
-            .httpBasic(Customizer.withDefaults());
+                .csrf(csrf -> csrf.disable())
+
+                .authorizeExchange(exchanges -> exchanges
+
+                        // Allow browser CORS preflight
+                        .pathMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+
+                        // GET products does not require authentication
+                        .pathMatchers(HttpMethod.GET, "/api/products/**").permitAll()
+
+                        // POST/PUT/DELETE require Basic Auth
+                        .anyExchange().authenticated()
+                )
+
+                .httpBasic(Customizer.withDefaults());
+
         return http.build();
     }
+
     @Bean
     public MapReactiveUserDetailsService userDetailsService() {
+
         UserDetails admin = User.withDefaultPasswordEncoder()
                 .username("admin")
                 .password("admin123")
                 .roles("ADMIN")
                 .build();
+
         return new MapReactiveUserDetailsService(admin);
     }
 }
